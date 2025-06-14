@@ -1,0 +1,116 @@
+# transfer_learning_xception.py
+# Transfer Learning with Xception (ImageNet pretrained)
+
+import numpy as np
+import random
+import cv2
+import glob
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report
+
+from keras.utils.np_utils import to_categorical
+from tensorflow.keras.applications import Xception
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import RandomFlip, RandomContrast, RandomRotation
+
+warnings.filterwarnings("ignore")
+random.seed(41)
+np.random.seed(41)
+
+# Load and balance dataset
+image_paths = glob.glob('/content/drive/MyDrive/Colab Notebooks/dosya/**/*.png', recursive=True)
+class0 = [f for f in image_paths if f.endswith("class0.png")]
+class1 = [f for f in image_paths if not f.endswith("class0.png")]
+
+sampled_class0 = random.sample(class0, 2000)
+sampled_class1 = random.sample(class1, 2000)
+
+img_size = 75
+
+# Load and resize images
+def load_images(data, label):
+    images = []
+    for path in data:
+        img = cv2.imread(path)
+        img = cv2.resize(img, (img_size, img_size))
+        images.append([img, label])
+    return images
+
+data0 = load_images(sampled_class0, 0)
+data1 = load_images(sampled_class1, 1)
+
+data = data0 + data1
+random.shuffle(data)
+X, y = zip(*data)
+X = np.array(X).reshape(-1, img_size, img_size, 3)
+y = to_categorical(np.array(y), 2)
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+# Load pretrained Xception model
+base_model = Xception(include_top=False, weights='imagenet', input_shape=(img_size, img_size, 3))
+base_model.trainable = False
+
+# Build the full model with preprocessing and custom head
+model = Sequential([
+    RandomFlip("horizontal_and_vertical"),
+    RandomContrast(0.5),
+    RandomRotation(0.1),
+    base_model,
+    GlobalAveragePooling2D(),
+    Dense(2, activation='sigmoid')
+])
+
+# Compile
+model.compile(
+    loss='categorical_crossentropy',
+    optimizer=Adam(learning_rate=0.001),
+    metrics=['accuracy']
+)
+
+# Callbacks
+callbacks = [
+    EarlyStopping(monitor='val_loss', patience=5, verbose=1),
+    ModelCheckpoint('xception_breast_model.h5', save_best_only=True)
+]
+
+# Train
+history = model.fit(X_train, y_train,
+                    validation_data=(X_test, y_test),
+                    epochs=30,
+                    batch_size=64,
+                    callbacks=callbacks)
+
+# Evaluate
+Y_pred = model.predict(X_test)
+Y_pred_classes = np.argmax(Y_pred, axis=1)
+Y_true = np.argmax(y_test, axis=1)
+
+# Confusion Matrix
+plt.figure(figsize=(8, 8))
+sns.heatmap(confusion_matrix(Y_true, Y_pred_classes), annot=True, fmt=".1f", cmap="Purples")
+plt.title("Confusion Matrix - Xception")
+plt.xlabel("Predicted")
+plt.ylabel("True")
+plt.show()
+
+# Classification Report
+print(classification_report(Y_true, Y_pred_classes))
+
+# Accuracy Plot
+plt.plot(history.history['accuracy'], label='Train Acc')
+plt.plot(history.history['val_accuracy'], label='Val Acc')
+plt.title("Xception Transfer Learning Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.grid(True)
+plt.show()
