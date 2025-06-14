@@ -1,0 +1,98 @@
+# cnn_model1.py
+# CNN training pipeline using basic CNN architecture
+
+import numpy as np
+import os
+import random
+import cv2
+import glob
+import warnings
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from keras.utils.np_utils import to_categorical
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D, Dropout, Flatten, Dense
+from tensorflow.keras.optimizers import Adam
+
+# Suppress warnings for clean output
+warnings.filterwarnings("ignore")
+
+# Set seeds for reproducibility
+random.seed(98)
+np.random.seed(98)
+
+# Load image file paths recursively
+files = glob.glob('/content/drive/MyDrive/Colab Notebooks/dosya/**/*.png', recursive=True)
+
+# Split files by class based on filename
+class0 = [f for f in files if f.endswith("class0.png")]  # Non-cancer
+class1 = [f for f in files if not f.endswith("class0.png")]  # Cancer
+
+# Equalize class distribution
+some_non_img = random.sample(class0, len(class1))
+some_can_img = random.sample(class1, len(class1))
+
+# Read and resize images to (50x50)
+non_img_arr = []
+for img in some_non_img:
+    n_img = cv2.imread(img, cv2.IMREAD_COLOR)
+    n_img = cv2.resize(n_img, (50, 50))
+    non_img_arr.append([n_img, 0])  # 0: non-cancer
+
+can_img_arr = []
+for img in some_can_img:
+    c_img = cv2.imread(img, cv2.IMREAD_COLOR)
+    c_img = cv2.resize(c_img, (50, 50))
+    can_img_arr.append([c_img, 1])  # 1: cancer
+
+# Combine and shuffle data
+data = non_img_arr + can_img_arr
+random.shuffle(data)
+X, y = zip(*data)
+X = np.array(X)
+y = to_categorical(np.array(y), 2)
+
+# Split into train/test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=7)
+
+# Define CNN architecture
+model = Sequential([
+    Conv2D(32, (3, 3), padding='same', activation='relu', input_shape=(50, 50, 3)),
+    MaxPooling2D(2, 2),
+    Dropout(0.25),
+
+    Conv2D(64, (3, 3), padding='same', activation='relu'),
+    MaxPooling2D(2, 2),
+    Dropout(0.25),
+
+    Conv2D(128, (3, 3), padding='same', activation='relu'),
+    MaxPooling2D(2, 2),
+    Dropout(0.25),
+
+    Conv2D(128, (3, 3), padding='same', activation='relu'),
+    MaxPooling2D(2, 2),
+    Dropout(0.25),
+
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(2, activation='sigmoid')  # Binary classification (2 classes)
+])
+
+# Compile the model
+optimizer = Adam(learning_rate=0.001)
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=30, batch_size=50)
+
+# Optional: Plot training history
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Val Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.title('Training and Validation Accuracy')
+plt.legend()
+plt.grid()
+plt.show()
