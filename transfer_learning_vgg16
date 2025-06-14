@@ -1,0 +1,126 @@
+# transfer_learning_vgg16.py
+# Transfer Learning using VGG16 (pretrained on ImageNet)
+
+import numpy as np
+import random
+import cv2
+import glob
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report
+
+from keras.utils.np_utils import to_categorical
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+# Ignore warnings
+warnings.filterwarnings("ignore")
+
+# Set random seeds
+random.seed(41)
+np.random.seed(41)
+
+# Load image paths
+image_paths = glob.glob('/content/drive/MyDrive/Colab Notebooks/dosya/**/*.png', recursive=True)
+
+# Separate classes
+class0 = [f for f in image_paths if f.endswith("class0.png")]
+class1 = [f for f in image_paths if not f.endswith("class0.png")]
+
+# Balance the dataset
+sampled_class0 = random.sample(class0, 2000)
+sampled_class1 = random.sample(class1, 2000)
+
+img_size = 75
+
+# Read and resize images
+def get_image_arrays(data, label):
+    arr = []
+    for path in data:
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
+        img = cv2.resize(img, (img_size, img_size))
+        arr.append([img, label])
+    return arr
+
+data_class0 = get_image_arrays(sampled_class0, 0)
+data_class1 = get_image_arrays(sampled_class1, 1)
+
+# Combine and shuffle
+data = data_class0 + data_class1
+random.shuffle(data)
+X, y = zip(*data)
+X = np.array(X).reshape(-1, img_size, img_size, 3)
+y = to_categorical(np.array(y), num_classes=2)
+
+# Split train/test
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+# Load VGG16 base model without top layers
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(img_size, img_size, 3))
+base_model.trainable = False  # Freeze weights
+
+# Add custom layers on top of VGG16
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dropout(0.2)(x)
+x = Dense(4096, activation="relu")(x)
+x = Dense(4096, activation="relu")(x)
+x = Dropout(0.2)(x)
+x = Dense(2096, activation="relu")(x)
+predictions = Dense(2, activation="sigmoid")(x)
+
+# Final model
+model = Model(inputs=base_model.input, outputs=predictions)
+
+# Compile
+model.compile(
+    loss='categorical_crossentropy',
+    optimizer=Adam(learning_rate=0.001),
+    metrics=['accuracy']
+)
+
+# Define callbacks
+callbacks = [
+    EarlyStopping(monitor='val_loss', patience=5, verbose=1),
+    ModelCheckpoint('vgg16_breast_model.h5', save_best_only=True)
+]
+
+# Train the model
+history = model.fit(X_train, y_train,
+                    validation_data=(X_test, y_test),
+                    epochs=30,
+                    batch_size=64,
+                    callbacks=callbacks)
+
+# Evaluate
+Y_pred = model.predict(X_test)
+Y_pred_classes = np.argmax(Y_pred, axis=1)
+Y_true = np.argmax(y_test, axis=1)
+
+# Confusion matrix
+conf_matrix = confusion_matrix(Y_true, Y_pred_classes)
+plt.figure(figsize=(8, 8))
+sns.heatmap(conf_matrix, annot=True, fmt=".1f", cmap="OrRd", linecolor="black")
+plt.title("Confusion Matrix - VGG16")
+plt.xlabel("Predicted")
+plt.ylabel("True")
+plt.show()
+
+# Report
+print(classification_report(Y_true, Y_pred_classes))
+
+# Accuracy plot
+plt.plot(history.history['accuracy'], label='Train Acc')
+plt.plot(history.history['val_accuracy'], label='Val Acc')
+plt.title("VGG16 Transfer Learning Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.grid(True)
+plt.show()
