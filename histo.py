@@ -26,7 +26,7 @@ os.environ['KAGGLE_CONFIG_DIR'] = "/content/drive/MyDrive/Colab Notebooks/dosya"
 
 """# CNN_Model1"""
 
-# kütüphane ekleme
+# adding library
 import pandas as pd
 import numpy as np
 import keras
@@ -54,15 +54,15 @@ from PIL import Image
 random.seed(98)
 np.random.seed(98)
 
-# dosya yükleme
+# upload a file
 files = glob('/content/drive/MyDrive/Colab Notebooks/dosya/**/*.png', recursive=True)
 
-# kanser olan ve olmayan resimleri ayrı listelere ekledim
-# 0 - kanser değil
-# 1- kanser
+# added cancer and non-cancer images to separate lists
+# 0 - non-cancer
+# 1- canser
 
-class0 = [] #kanser değil
-class1 = [] #kanser
+class0 = [] #non-cancer
+class1 = [] #cancer
 
 for filename in files:
     if filename.endswith("class0.png"):
@@ -70,11 +70,11 @@ for filename in files:
     else:
         class1.append(filename)
 
-# kanser olan ve olmayanların sayısını bulma
+# finding the number of cancer and non-cancer
 non_num = len(class0)
 can_num = len(class1)
 
-# toplam sayı
+# total number
 total_img_num = non_num + can_num
 
 print(non_num)
@@ -193,7 +193,7 @@ history = model.fit(X_train, y_train, validation_data = (X_test, y_test), epochs
 
 """# CNN_Model2"""
 
-# kütüphane ekleme
+# adding library
 import pandas as pd
 import numpy as np
 import os
@@ -231,17 +231,17 @@ from keras.layers import Dense, Dropout, Activation, Flatten, BatchNormalization
 import random
 from random import sample
 
-# dosya yükleme
+# upload a file
 imagePatches = glob('/content/drive/MyDrive/Colab Notebooks/dosya/**/*.png', recursive=True)
 
 len(imagePatches)
 
-# kanser olan ve olmayan resimleri ayrı listelere ekledim
-# 0 - kanser değil
-# 1- kanser
+# added cancer and non-cancer images to separate lists
+# 0 - non-cancer
+# 1- canser
 
-class0 = [] #kanser değil
-class1 = [] #kanser
+class0 = [] #non-cancer
+class1 = [] #canser
 
 for filename in imagePatches:
     if filename.endswith("class0.png"):
